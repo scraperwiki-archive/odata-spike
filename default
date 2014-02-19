@@ -1,9 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import cgitb
-cgitb.enable()
-
 from wsgiref.handlers import CGIHandler
 import os
 import datetime
@@ -12,8 +9,7 @@ from textwrap import dedent
 import logging
 from logging import FileHandler
 
-from flask import Flask
-from flask.helpers import make_response
+from flask import Flask, Response, render_template
 
 # move to home directory so
 # dumptruck can find sqlite file
@@ -27,75 +23,51 @@ logger = FileHandler('/home/http/error.txt')
 logger.setLevel(logging.WARNING)
 app.logger.addHandler(logger)
 
+# Avoid default Flask redirect when a
+# URL is requested without a final slash
+app.url_map.strict_slashes = False
+
 # Get the "root" url path, because
-# Flask isn't running at the domain root.
+# Flask isn't running at the domain root
 path = os.environ['PATH_INFO']
 root = '/'.join(path.split('/')[0:5])
 
-id = 'https://{}{}'.format(os.environ['HTTP_HOST'], os.environ['PATH_INFO'])
+# Stop extra whitespace creeping
+# into Jinja templates
+app.jinja_env.trim_blocks = True
+app.jinja_env.lstrip_blocks = True
+
+request_url = 'https://{}{}'.format(os.environ['HTTP_HOST'], os.environ['PATH_INFO'])
 
 @app.route(root + "/")
-def tables():
+def show_collections():
     tables = scraperwiki.sql.show_tables().keys()
-    xml = ''
-    for table in tables:
-        xml += u"""
-            <collection href="{table}">
-              <atom:title>{table}</atom:title>
-            </collection>""".format(table=table)
-
-    resp = make_response(u"""\
-        <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-        <service xmlns:atom="http://www.w3.org/2005/Atom" xmlns:app="http://www.w3.org/2007/app" xmlns="http://www.w3.org/2007/app" xml:base="{id}">
-          <workspace>
-            <atom:title>Default</atom:title>{xml}
-          </workspace>
-        </service>
-    """.format(id=id, xml=xml))
+    resp = Response()
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
-
+    resp.data = render_template('collections.xml', base_url=request_url, collections=tables)
     return resp
 
-@app.route(root + "/<table>")
-def table(table):
-    rows = scraperwiki.sql.select('rowid, * FROM "{table}"'.format(table=table))
-    xml = ''
+@app.route(root + "/<collection>/")
+def show_collection(collection):
+    rows = scraperwiki.sql.select('rowid, * FROM "{collection}"'.format(collection=collection))
+    entries = []
     for row in rows:
-        cells = ''
+        entry = {
+            'url': u"{}({})".format(request_url, row['rowid']),
+            'rowid': row['rowid'],
+            'cells': []
+        }
         for column, value in row.iteritems():
             if column != 'rowid':
-                cells += u'<d:{column}>{value}</d:{column}>'.format(column=column, value=value)
+                entry['cells'].append({
+                    'column': column,
+                    'value': value
+                })
+        entries.append(entry)
 
-        xml += u"""
-        <entry>
-          <id>{id}({rowid})</id>
-          <title type="text"></title>
-          <updated>2014-02-19T14:13:38Z</updated>
-          <author>
-            <name />
-          </author>
-          <link rel="edit" title="{table}" href="{table}({rowid})" />
-          <category term="scraperwiki.com.sql" scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme" />
-          <content type="application/xml">
-            <m:properties>
-              <d:ROWID m:type="Edm.Int32">{rowid}</d:ROWID>
-              {cells}
-            </m:properties>
-          </content>
-        </entry>
-        """.format(id=id, rowid=row['rowid'], table=table, cells=cells)
-
-    resp = make_response(u"""<?xml version="1.0" encoding="utf-8" standalone="yes"?>
-    <feed xml:base="{id}" xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns="http://www.w3.org/2005/Atom">
-      <title type="text">{table}</title>
-      <id>{id}</id>
-      <updated>2014-02-19T14:13:38Z</updated>
-      <link rel="self" title="{table}" href="{table}" />
-      {xml}
-    </feed>
-    """.format(id=id, table=table, xml=xml))
+    resp = Response()
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
-
+    resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries)
     return resp
 
 CGIHandler().run(app)

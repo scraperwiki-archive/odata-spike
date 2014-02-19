@@ -14,10 +14,12 @@ app = Flask(__name__)
 path = os.environ['PATH_INFO']
 root = '/'.join(path.split('/')[0:5])
 
+@app.route(root + "/")
+def tables():
+    return "{} the time is {}".format('tables', datetime.datetime.now())
 
-
-@app.route(root+"/")
-def hello():
-    return "the time is {}".format(datetime.datetime.now())
+@app.route(root + "/<table>")
+def table(table):
+    return "{} the time is {}".format(table, datetime.datetime.now())
 
 CGIHandler().run(app)

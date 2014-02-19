@@ -39,6 +39,7 @@ app.jinja_env.lstrip_blocks = True
 
 request_url = 'https://{}{}'.format(os.environ['HTTP_HOST'], os.environ['PATH_INFO'])
 
+
 @app.route(root + "/")
 def show_collections():
     tables = scraperwiki.sql.show_tables().keys()
@@ -47,8 +48,18 @@ def show_collections():
     resp.data = render_template('collections.xml', base_url=request_url, collections=tables)
     return resp
 
+
 @app.route(root + "/<collection>/")
 def show_collection(collection):
+    # TODO: check that `collection` table actually exists
+    entries = get_entries_in_collection(collection)
+    resp = Response()
+    resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
+    resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries)
+    return resp
+
+
+def get_entries_in_collection(collection):
     rows = scraperwiki.sql.select('rowid, * FROM "{collection}"'.format(collection=collection))
     entries = []
     for row in rows:
@@ -64,10 +75,7 @@ def show_collection(collection):
                     'value': value
                 })
         entries.append(entry)
+    return entries
 
-    resp = Response()
-    resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
-    resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries)
-    return resp
 
 CGIHandler().run(app)

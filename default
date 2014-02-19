@@ -1,13 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from wsgiref.handlers import CGIHandler
-import os
-import datetime
-from textwrap import dedent
-
 import logging
 from logging import FileHandler
+from wsgiref.handlers import CGIHandler
+import os
 
 from flask import Flask, Response, render_template
 
@@ -18,7 +15,7 @@ import scraperwiki
 
 app = Flask(__name__)
 
-# Error handling
+# Log exceptions to http/error.txt
 logger = FileHandler('/home/http/error.txt')
 logger.setLevel(logging.WARNING)
 app.logger.addHandler(logger)
@@ -63,19 +60,40 @@ def get_entries_in_collection(collection):
     rows = scraperwiki.sql.select('rowid, * FROM "{collection}"'.format(collection=collection))
     entries = []
     for row in rows:
-        entry = {
+        entries.append({
             'url': u"{}({})".format(request_url, row['rowid']),
             'rowid': row['rowid'],
-            'cells': []
-        }
-        for column, value in row.iteritems():
-            if column != 'rowid':
-                entry['cells'].append({
-                    'column': column,
-                    'value': value
-                })
-        entries.append(entry)
+            'cells': get_cells_in_row(row)
+        })
     return entries
+
+
+def get_cells_in_row(row):
+    # `row` should be a dict, where the keys are
+    # column names and the values are cell values
+    cells = []
+    for column, value in row.iteritems():
+        if column != 'rowid':
+            cells.append({
+                'column': column,
+                'value': value,
+                'type': get_cell_type(value)
+            })
+    return cells
+
+
+def get_cell_type(value):
+    if value is None:
+        return 'Edm.Null'
+    elif isinstance(value, float):
+        return 'Edm.Double'
+    elif isinstance(value, int):
+        return 'Edm.Int32'
+    elif isinstance(value, bool):
+        return 'Edm.Boolean'
+    else:
+        # TODO: handle dates!! Edm.DateTime
+        return 'Edm.String'
 
 
 CGIHandler().run(app)

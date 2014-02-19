@@ -17,7 +17,7 @@
       <m:properties>
         <d:ROWID m:type="Edm.Int32">{{ entry.rowid }}</d:ROWID>
         {% for cell in entry.cells %}
-        <d:{{ cell.column }}>{{ cell.value }}</d:{{ cell.column }}>
+        <d:{{ cell.column }} m:type="{{ cell.type }}">{{ cell.value }}</d:{{ cell.column }}>
         {% endfor %}
       </m:properties>
     </content>

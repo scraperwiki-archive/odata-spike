@@ -1,15 +1,31 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 import cgitb
 cgitb.enable()
 
 from wsgiref.handlers import CGIHandler
 import os
 import datetime
+from textwrap import dedent
+
+import logging
+from logging import FileHandler
 
 from flask import Flask
 from flask.helpers import make_response
 
+# move to home directory so
+# dumptruck can find sqlite file
+os.chdir('/home')
+import scraperwiki
+
 app = Flask(__name__)
+
+# Error handling
+logger = FileHandler('/home/http/error.txt')
+logger.setLevel(logging.WARNING)
+app.logger.addHandler(logger)
 
 # Get the "root" url path, because
 # Flask isn't running at the domain root.
@@ -20,46 +36,64 @@ id = 'https://{}{}'.format(os.environ['HTTP_HOST'], os.environ['PATH_INFO'])
 
 @app.route(root + "/")
 def tables():
-    resp = make_response("""<?xml version="1.0" encoding="utf-8" standalone="yes"?>
-    <service xmlns:atom="http://www.w3.org/2005/Atom" xmlns:app="http://www.w3.org/2007/app" xmlns="http://www.w3.org/2007/app" xml:base="{id}">
-        <workspace>
-            <atom:title>Default</atom:title>
-            <collection href="tweets">
-                <atom:title>tweets</atom:title>
-            </collection>
-        </workspace>
-    </service>""".format(id=id))
+    tables = scraperwiki.sql.show_tables().keys()
+    xml = ''
+    for table in tables:
+        xml += u"""
+            <collection href="{table}">
+              <atom:title>{table}</atom:title>
+            </collection>""".format(table=table)
+
+    resp = make_response(u"""\
+        <?xml version="1.0" encoding="utf-8" standalone="yes"?>
+        <service xmlns:atom="http://www.w3.org/2005/Atom" xmlns:app="http://www.w3.org/2007/app" xmlns="http://www.w3.org/2007/app" xml:base="{id}">
+          <workspace>
+            <atom:title>Default</atom:title>{xml}
+          </workspace>
+        </service>
+    """.format(id=id, xml=xml))
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
 
     return resp
 
 @app.route(root + "/<table>")
 def table(table):
-    resp = make_response("""<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+    rows = scraperwiki.sql.select('rowid, * FROM "{table}"'.format(table=table))
+    xml = ''
+    for row in rows:
+        cells = ''
+        for column, value in row.iteritems():
+            if column != 'rowid':
+                cells += u'<d:{column}>{value}</d:{column}>'.format(column=column, value=value)
+
+        xml += u"""
+        <entry>
+          <id>{id}({rowid})</id>
+          <title type="text"></title>
+          <updated>2014-02-19T14:13:38Z</updated>
+          <author>
+            <name />
+          </author>
+          <link rel="edit" title="{table}" href="{table}({rowid})" />
+          <category term="scraperwiki.com.sql" scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme" />
+          <content type="application/xml">
+            <m:properties>
+              <d:ROWID m:type="Edm.Int32">{rowid}</d:ROWID>
+              {cells}
+            </m:properties>
+          </content>
+        </entry>
+        """.format(id=id, rowid=row['rowid'], table=table, cells=cells)
+
+    resp = make_response(u"""<?xml version="1.0" encoding="utf-8" standalone="yes"?>
     <feed xml:base="{id}" xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns="http://www.w3.org/2005/Atom">
-      <title type="text">tweets</title>
+      <title type="text">{table}</title>
       <id>{id}</id>
       <updated>2014-02-19T14:13:38Z</updated>
-      <link rel="self" title="tweets" href="tweets" />
-      <entry>
-        <id>{id}(1)</id>
-        <title type="text"></title>
-        <updated>2014-02-19T14:13:38Z</updated>
-        <author>
-          <name />
-        </author>
-        <link rel="edit" title="tweets" href="tweets(1)" />
-        <category term="scraperwiki.com.sql" scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme" />
-        <content type="application/xml">
-          <m:properties>
-            <d:ROWID m:type="Edm.Int32">1</d:ROWID>
-            <d:screen_name>zarino</d:screen_name>
-            <d:text>example tweet</d:text>
-          </m:properties>
-        </content>
-      </entry>
+      <link rel="self" title="{table}" href="{table}" />
+      {xml}
     </feed>
-    """.format(id=id))
+    """.format(id=id, table=table, xml=xml))
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
 
     return resp

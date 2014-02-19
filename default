@@ -1,0 +1,21 @@
+#!/usr/bin/python
+import cgitb
+cgitb.enable()
+
+from wsgiref.handlers import CGIHandler
+import os
+import datetime
+
+from flask import Flask
+app = Flask(__name__)
+
+path = os.environ['PATH_INFO']
+root = '/'.join(path.split('/')[0:5])
+
+
+
+@app.route(root+"/")
+def hello():
+    return "the time is {}".format(datetime.datetime.now())
+
+CGIHandler().run(app)

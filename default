@@ -4,7 +4,9 @@
 import logging
 from logging import FileHandler
 from wsgiref.handlers import CGIHandler
+import dateutil.parser
 import os
+import re
 
 from flask import Flask, Response, render_template
 
@@ -75,10 +77,24 @@ def get_cells_in_row(row):
     for column, value in row.iteritems():
         cells.append({
             'column': column,
-            'value': value,
+            'value': format_cell_value(value),
             'type': get_cell_type(value)
         })
     return cells
+
+
+def format_cell_value(value):
+    # Jinja gets this mostly right, so we
+    # only have to check for date formatting
+    if isinstance(value, (str, unicode)):
+        try:
+            datetime = dateutil.parser.parse(value)
+        except:
+            return value
+        else:
+            return datetime.isoformat()
+    else:
+        return value
 
 
 def get_cell_type(value):
@@ -87,11 +103,20 @@ def get_cell_type(value):
     elif isinstance(value, float):
         return 'Edm.Double'
     elif isinstance(value, int):
-        return 'Edm.Int32'
+        if value.bit_length() < 32:
+            return 'Edm.Int32'
+        else:
+            return 'Edm.Int64'
     elif isinstance(value, bool):
         return 'Edm.Boolean'
+    elif isinstance(value, (str, unicode)):
+        try:
+            dateutil.parser.parse(value)
+        except:
+            return 'Edm.String'
+        else:
+            return 'Edm.DateTime'
     else:
-        # TODO: handle dates!! Edm.DateTime
         return 'Edm.String'
 
 

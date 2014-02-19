@@ -44,6 +44,9 @@ def show_collections():
     tables = scraperwiki.sql.show_tables().keys()
     resp = Response()
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
+    resp.headers['Access-Control-Expose-Headers'] = 'DataServiceVersion'
+    # TODO: for some reason, Flask turns this into `Dataserviceversion` which is invalid
+    resp.headers['DataServiceVersion'] = '1.0;'
     resp.data = render_template('collections.xml', base_url=request_url, collections=tables)
     return resp
 
@@ -54,6 +57,9 @@ def show_collection(collection):
     entries = get_entries_in_collection(collection)
     resp = Response()
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
+    resp.headers['Access-Control-Expose-Headers'] = 'DataServiceVersion'
+    # TODO: for some reason, Flask turns this into `Dataserviceversion` which is invalid
+    resp.headers['DataServiceVersion'] = '1.0;'
     resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries)
     return resp
 

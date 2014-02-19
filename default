@@ -73,12 +73,11 @@ def get_cells_in_row(row):
     # column names and the values are cell values
     cells = []
     for column, value in row.iteritems():
-        if column != 'rowid':
-            cells.append({
-                'column': column,
-                'value': value,
-                'type': get_cell_type(value)
-            })
+        cells.append({
+            'column': column,
+            'value': value,
+            'type': get_cell_type(value)
+        })
     return cells
 
 

@@ -8,7 +8,7 @@ import dateutil.parser
 import os
 import re
 
-from flask import Flask, Response, render_template
+from flask import Flask, Response, render_template, request
 
 # move to home directory so
 # dumptruck can find sqlite file
@@ -53,19 +53,35 @@ def show_collections():
 
 @app.route(root + "/<collection>/")
 def show_collection(collection):
+    if request.args.get('$skiptoken'):
+        limit = 100
+        offset = int(request.args.get('$skiptoken'))
+    else:
+        limit = int(request.args.get('$top', 100))
+        offset = int(request.args.get('$skip', 0))
     # TODO: check that `collection` table actually exists
-    entries = get_entries_in_collection(collection)
+    entries = get_entries_in_collection(collection, limit, offset)
+    if request.args.get('$skiptoken'):
+        next_url = '{}?$skiptoken={}'.format(request_url, entries[-1]['rowid'])
+    else:
+        next_url = '{}?$top={}&$skip={}'.format(request_url, limit, limit + offset)
     resp = Response()
     resp.headers['Content-Type'] = 'application/xml;charset=utf-8'
     resp.headers['Access-Control-Expose-Headers'] = 'DataServiceVersion'
     # TODO: for some reason, Flask turns this into `Dataserviceversion` which is invalid
     resp.headers['DataServiceVersion'] = '1.0;'
-    resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries)
+    resp.data = render_template('collection.xml', base_url=request_url, collection=collection, entries=entries, next_url=next_url)
     return resp
 
 
-def get_entries_in_collection(collection):
-    rows = scraperwiki.sql.select('rowid, * FROM "{collection}"'.format(collection=collection))
+def get_entries_in_collection(collection, limit=100, offset=0):
+    rows = scraperwiki.sql.select(
+        'rowid, * FROM "{collection}" LIMIT {limit} OFFSET {offset}'.format(
+            collection=collection,
+            limit=limit,
+            offset=offset
+        )
+    )
     entries = []
     for row in rows:
         entries.append({

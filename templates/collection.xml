@@ -26,4 +26,7 @@
     </content>
   </entry>
   {% endfor %}
+  {% if next_url %}
+  <link rel="next" href="{{ next_url|safe }}" />
+  {% endif %}
 </feed>

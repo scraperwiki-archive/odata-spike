@@ -61,7 +61,9 @@ def show_collection(collection):
         offset = int(request.args.get('$skip', 0))
     # TODO: check that `collection` table actually exists
     entries = get_entries_in_collection(collection, limit, offset)
-    if request.args.get('$skiptoken'):
+    if len(entries) != limit:
+        next_url = None
+    elif request.args.get('$skiptoken'):
         next_url = '{}?$skiptoken={}'.format(request_url, entries[-1]['rowid'])
     else:
         next_url = '{}?$top={}&$skip={}'.format(request_url, limit, limit + offset)
